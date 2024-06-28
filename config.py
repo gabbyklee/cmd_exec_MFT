@@ -18,7 +18,13 @@ CMD_GROUPS = {
         "uci export",
         "uci show",
     ],
-    "filesystems": ["cat /proc/mtd", "mount", "df"],
+    "filesystems": [
+        "cat /proc/mtd",
+        "cat /proc/mounts",
+        "cat /proc/partitions",
+        "mount",
+        "df",
+    ],
     "systemlogs": ["dmesg", "logread"],
     "ifconfig": ["ifconfig"],
     "ip": [
@@ -35,6 +41,7 @@ CMD_GROUPS = {
         "free",
         "cat /proc/uptime",
         "netstat -anlpeW",
+        "top -b -n 3 -d 1",
     ],
     "ubus_network": [
         "ubus call router_info getRouterinfo",
@@ -42,6 +49,8 @@ CMD_GROUPS = {
         "ubus call network.device status",
         "ubus call network.interface dump",
         "ubus call network.wireless status",
+        "ubus call network.interface.cellular status",
+        "ubus call serviceaction getCellulardata",
         "ubus call mwan3 status",
     ],
     "ubus_wifi": [
