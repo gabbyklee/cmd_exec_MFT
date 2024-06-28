@@ -167,25 +167,55 @@ def test_uname(conn, fobj=sys.stdout):
         fpr("\nCONNECTION ESTABLISHED\n", fobj)
         return True
     
+# Execute command groups specified by user
 def run_commands(conn, dir_path):
-    if select_cg:
+    # If -c was not inputted
+    if select_cg == "no_input":
+        pass
+    # If -c flag was inputted with no following argument
+    elif select_cg is None:
+        print(f"\nNO COMMAND GROUP(S) WAS PROVIDED. PLEASE ENTER A VALID COMMAND GROUP AFTER THE '-g' FLAG\n")
+        sys.exit()
+    # If -c has an argument following, check if it is valid
+    else:
         for cg in select_cg:
             if cg in CMD_GROUPS.keys():
                 execute_cmdgroup(conn, cg, CMD_GROUPS[f"{cg}"], dir_path)
             elif cg not in CMD_GROUPS.keys():
                 print(f"\nCOMMAND GROUP NAME '{cg}' DOES NOT EXIST\n")
+                sys.exit()    
+
+# Copy files/directories specified by user
+def copy_over(conn, dir_path):
+    # If -g was not inputted
+    if copy_df == 'no_input':
+        pass
+     # If -g flag was inputted with no following argument
+    elif copy_df is None:
+        print(f"\nNO PATH TO COPY FROM WAS PROVIDED. PLEASE ENTER A VALID PATH AFTER THE '-c' FLAG\n")
+        sys.exit()
+    # If -g has an argument following, check if it is valid
+    else:
+        for log_path in copy_df:
+            try:
+                conn.run(f"ls {log_path}", hide=True)
+            except invoke.exceptions.UnexpectedExit as ex:
+                fpr("\nPATH TO COPY DOES NOT EXIST: '{}'\n".format(log_path), sys.stdout)
                 sys.exit()
-     # Nothing was entered
-    elif not select_cg:
+            except invoke.exceptions.Failure as ex:
+                fpr("\nFAILURE:\n'{}'".format(ex), sys.stdout)
+            except invoke.exceptions.ThreadException as ex:
+                fpr("\nTHREADEXCEPTION:\n'{}'".format(ex), sys.stdout)
+            except Exception as ex:
+                fpr("\nPATH TO COPY DOES NOT EXIST: '{}'\n".format(log_path), sys.stdout)
+                sys.exit()
+            else:
+                copy_log(log_path, dir_path)    
+
+def copy_n_cmd(copy_df, select_cg):
+    if copy_df == 'no_input' and select_cg == 'no_input':
         for cmd_grp, cmds in CMD_GROUPS.items():
             execute_cmdgroup(conn, cmd_grp, cmds, dir_path)
-
-def copy_over(dir_path):
-    # Copy Files/Directories 
-    if copy_df:
-        for log_path in copy_df:
-            copy_log(log_path, dir_path)
-    else:
         for log_path in REMOTE_DIR_PATHS:
             copy_log(log_path, dir_path)
 
@@ -236,6 +266,7 @@ if __name__ == "__main__":
         help="Enter specific command group(s) to execute.",
         nargs="*",
         required=False,
+        default="no_input"
     )
 
     # Parse argument for choosing a directory path to copy from
@@ -247,6 +278,7 @@ if __name__ == "__main__":
         help="Provide the path to the directory you wish to copy.",
         nargs="*",
         required=False,
+        default="no_input"
     )
 
     # Choose whether to compress dump directory or not
@@ -255,7 +287,7 @@ if __name__ == "__main__":
         "--compress",
         dest="compress",
         action="store_true",
-        help="Selecting this flag indicates you want to compress the dump directory into a zip file.",
+        help="Compress the dump directory into a zip file.",
         required=False,
     )
 
@@ -274,9 +306,15 @@ if __name__ == "__main__":
 
         # Test for connection before executing commands
         dir_path = select_path(conn, user_path)
+
+        # By default run commands and copy files/directories
+        copy_n_cmd(copy_df, select_cg)
         
+        # Execute user specified command groups
         run_commands(conn, dir_path)
-        copy_over(dir_path)
+    
+        # Copy user specified files/directories
+        copy_over(conn, dir_path)
 
         # Choose to compress dump directory into zip file
         if compress:
