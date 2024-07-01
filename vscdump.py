@@ -166,75 +166,89 @@ def test_uname(conn, fobj=sys.stdout):
     else:
         fpr("\nCONNECTION ESTABLISHED\n", fobj)
         return True
-    
-# Execute command groups specified by user
-def run_commands(conn, dir_path):
-    # If -c was not inputted
-    if select_cg == "no_input":
-        pass
-    # If -c flag was inputted with no following argument
-    elif select_cg is None:
-        print(f"\nNO COMMAND GROUP(S) WAS PROVIDED. PLEASE ENTER A VALID COMMAND GROUP AFTER THE '-g' FLAG\n")
-        sys.exit()
-    # If -c has an argument following, check if it is valid
-    else:
-        for cg in select_cg:
-            if cg in CMD_GROUPS.keys():
-                execute_cmdgroup(conn, cg, CMD_GROUPS[f"{cg}"], dir_path)
-            elif cg not in CMD_GROUPS.keys():
-                print(f"\nCOMMAND GROUP NAME '{cg}' DOES NOT EXIST\n")
-                sys.exit()    
 
-# Copy files/directories specified by user
-def copy_over(conn, dir_path):
-    # If -g was not inputted
-    if copy_df == 'no_input':
-        pass
-     # If -g flag was inputted with no following argument
-    elif copy_df is None:
-        print(f"\nNO PATH TO COPY FROM WAS PROVIDED. PLEASE ENTER A VALID PATH AFTER THE '-c' FLAG\n")
+
+# Default run all command groups and copy default directories
+def copy_n_cmd(cpy_valid, cg_valid):
+    for cmd_grp, cmds in CMD_GROUPS.items():
+        execute_cmdgroup(conn, cmd_grp, cmds, dir_path)
+    for log_path in REMOTE_DIR_PATHS:
+        copy_log(log_path, dir_path)
+
+
+def select_path(conn, user_path, cpy_valid, cg_valid):
+    if test_uname(conn):
+        # Test for a valid path
+        if user_path is not None:
+            if os.path.exists(user_path):
+                dir_path = os.path.join(
+                    user_path, dump_dirname
+                )  # Complete path on local machine
+                if (cg_valid or cpy_valid) or (not cg_valid and not cpy_valid):
+                    os.makedirs(dir_path, exist_ok=True)  # Create path
+                return dir_path
+            else:
+                print(f"\nPATH NAME '{user_path}' DOES NOT EXIST\n")
+                sys.exit()
+        else:
+            print(f"\nPATH NAME '{user_path}' DOES NOT EXIST\n")
+            sys.exit()
+
+
+def valid_check(copy_df, select_cg):
+    cpy_valid = False
+    # If -g flag was inputted with no following argument
+    if not copy_df:
+        fpr(
+            f"\nNO PATH TO COPY FROM WAS PROVIDED. PLEASE ENTER A VALID PATH AFTER THE '-c' FLAG\n",
+            sys.stdout,
+        )
         sys.exit()
+    # If -g was not inputted
+    elif "no_input" in copy_df:
+        pass
     # If -g has an argument following, check if it is valid
     else:
         for log_path in copy_df:
             try:
                 conn.run(f"ls {log_path}", hide=True)
             except invoke.exceptions.UnexpectedExit as ex:
-                fpr("\nPATH TO COPY DOES NOT EXIST: '{}'\n".format(log_path), sys.stdout)
+                fpr(
+                    "\nPATH TO COPY DOES NOT EXIST: '{}'\n".format(log_path), sys.stdout
+                )
                 sys.exit()
             except invoke.exceptions.Failure as ex:
                 fpr("\nFAILURE:\n'{}'".format(ex), sys.stdout)
             except invoke.exceptions.ThreadException as ex:
                 fpr("\nTHREADEXCEPTION:\n'{}'".format(ex), sys.stdout)
             except Exception as ex:
-                fpr("\nPATH TO COPY DOES NOT EXIST: '{}'\n".format(log_path), sys.stdout)
+                fpr(
+                    "\nPATH TO COPY DOES NOT EXIST: '{}'\n".format(log_path), sys.stdout
+                )
                 sys.exit()
             else:
-                copy_log(log_path, dir_path)    
+                cpy_valid = True
 
-def copy_n_cmd(copy_df, select_cg):
-    if copy_df == 'no_input' and select_cg == 'no_input':
-        for cmd_grp, cmds in CMD_GROUPS.items():
-            execute_cmdgroup(conn, cmd_grp, cmds, dir_path)
-        for log_path in REMOTE_DIR_PATHS:
-            copy_log(log_path, dir_path)
-
-def select_path(conn, user_path):
-    if test_uname(conn):
-            # Test for a valid path
-            if user_path is not None:
-                if os.path.exists(user_path):
-                    dir_path = os.path.join(
-                        user_path, dump_dirname
-                    )  # Complete path on local machine
-                    os.makedirs(dir_path, exist_ok=True)  # Create path
-                    return dir_path
-                else:
-                    print(f"\nPATH NAME '{user_path}' DOES NOT EXIST\n")
-                    sys.exit()
-            else:
-                print(f"\nPATH NAME '{user_path}' DOES NOT EXIST\n")
+    cg_valid = False
+    # If -c flag was inputted with no following argument
+    if not select_cg:
+        fpr(
+            f"\nNO COMMAND GROUP(S) WAS PROVIDED. PLEASE ENTER A VALID COMMAND GROUP AFTER THE '-g' FLAG\n", sys.stdout
+        )
+        sys.exit()
+    # If -c was not inputted
+    elif "no_input" in select_cg:
+        pass
+    # If -c has an argument following, check if it is valid
+    else:
+        for cg in select_cg:
+            if cg not in CMD_GROUPS.keys():
+                print(f"\nCOMMAND GROUP NAME '{cg}' DOES NOT EXIST\n")
                 sys.exit()
+            elif cg in CMD_GROUPS.keys():
+                cg_valid = True
+
+    return cpy_valid, cg_valid
 
 
 if __name__ == "__main__":
@@ -247,7 +261,7 @@ if __name__ == "__main__":
     # Parse argument for path leading to dump directory
     parser = argparse.ArgumentParser(description="Optional arguments to specify")
     parser.add_argument(
-        "-d",
+        "-p",
         "--dump-dir",
         dest="user_path",
         type=str,
@@ -266,7 +280,7 @@ if __name__ == "__main__":
         help="Enter specific command group(s) to execute.",
         nargs="*",
         required=False,
-        default="no_input"
+        default="no_input",
     )
 
     # Parse argument for choosing a directory path to copy from
@@ -278,7 +292,7 @@ if __name__ == "__main__":
         help="Provide the path to the directory you wish to copy.",
         nargs="*",
         required=False,
-        default="no_input"
+        default="no_input",
     )
 
     # Choose whether to compress dump directory or not
@@ -304,17 +318,28 @@ if __name__ == "__main__":
     # Execute command groups
     with fabric.connection.Connection(user_host, connect_kwargs=connect_kwargs) as conn:
 
-        # Test for connection before executing commands
-        dir_path = select_path(conn, user_path)
+        # Check if all command groups and all paths are valid, call functions
+        cpy_valid, cg_valid = valid_check(copy_df, select_cg)
 
-        # By default run commands and copy files/directories
-        copy_n_cmd(copy_df, select_cg)
-        
+        # Test for connection before executing commands
+        dir_path = select_path(conn, user_path, cpy_valid, cg_valid)
+
         # Execute user specified command groups
-        run_commands(conn, dir_path)
-    
-        # Copy user specified files/directories
-        copy_over(conn, dir_path)
+        if cg_valid and cpy_valid:  # If both flags selected
+            for cg in select_cg:
+                execute_cmdgroup(conn, cg, CMD_GROUPS[f"{cg}"], dir_path)
+
+            for log_path in copy_df:
+                copy_log(log_path, dir_path)
+        elif cg_valid and not cpy_valid:  # Only -g flag selected
+            for cg in select_cg:
+                execute_cmdgroup(conn, cg, CMD_GROUPS[f"{cg}"], dir_path)
+        elif cpy_valid and not cg_valid:  # Only -c flag selected
+            for log_path in copy_df:
+                copy_log(log_path, dir_path)
+        else:
+            # By default run commands and copy files/directories
+            copy_n_cmd(copy_df, select_cg)
 
         # Choose to compress dump directory into zip file
         if compress:
