@@ -12,7 +12,7 @@ from scp import SCPException
 import argparse
 import shutil
 
-from config_gklee import SSH_CONFIG, CMD_GROUPS, REMOTE_DIR_PATHS
+from config import SSH_CONFIG, CMD_GROUPS, REMOTE_DIR_PATHS
 
 
 def fpr(s, log_file):
@@ -169,7 +169,7 @@ def test_uname(conn, fobj=sys.stdout):
 
 
 # Default run all command groups and copy default directories
-def copy_n_cmd(cpy_valid, cg_valid):
+def copy_n_cmd(dir_path):
     for cmd_grp, cmds in CMD_GROUPS.items():
         execute_cmdgroup(conn, cmd_grp, cmds, dir_path)
     for log_path in REMOTE_DIR_PATHS:
@@ -196,7 +196,9 @@ def select_path(conn, user_path, cpy_valid, cg_valid):
 
 
 def valid_check(copy_df, select_cg):
+    # Default to false so it only copies when flag is entered
     cpy_valid = False
+
     # If -g flag was inputted with no following argument
     if not copy_df:
         fpr(
@@ -229,11 +231,13 @@ def valid_check(copy_df, select_cg):
             else:
                 cpy_valid = True
 
+    # Default to false so it only executes commands when flag is entered
     cg_valid = False
     # If -c flag was inputted with no following argument
     if not select_cg:
         fpr(
-            f"\nNO COMMAND GROUP(S) WAS PROVIDED. PLEASE ENTER A VALID COMMAND GROUP AFTER THE '-g' FLAG\n", sys.stdout
+            f"\nNO COMMAND GROUP(S) WAS PROVIDED. PLEASE ENTER A VALID COMMAND GROUP AFTER THE '-g' FLAG\n",
+            sys.stdout,
         )
         sys.exit()
     # If -c was not inputted
@@ -256,7 +260,6 @@ if __name__ == "__main__":
     dump_dirname = "vscx303dump-" + datetime.datetime.now(datetime.UTC).strftime(
         "%Y%m%dT%H%M%S"
     )
-    # Path for files to be copied to
 
     # Parse argument for path leading to dump directory
     parser = argparse.ArgumentParser(description="Optional arguments to specify")
@@ -289,7 +292,7 @@ if __name__ == "__main__":
         "--copy-dir",
         dest="copy_df",
         type=str,
-        help="Provide the path to the directory you wish to copy.",
+        help="Provide the path to the directory or file you wish to copy.",
         nargs="*",
         required=False,
         default="no_input",
@@ -318,7 +321,7 @@ if __name__ == "__main__":
     # Execute command groups
     with fabric.connection.Connection(user_host, connect_kwargs=connect_kwargs) as conn:
 
-        # Check if all command groups and all paths are valid, call functions
+        # Check if all entered command groups and all paths are valid 
         cpy_valid, cg_valid = valid_check(copy_df, select_cg)
 
         # Test for connection before executing commands
@@ -338,8 +341,8 @@ if __name__ == "__main__":
             for log_path in copy_df:
                 copy_log(log_path, dir_path)
         else:
-            # By default run commands and copy files/directories
-            copy_n_cmd(copy_df, select_cg)
+            # By default run all command groups and copy files/directories
+            copy_n_cmd(dir_path)
 
         # Choose to compress dump directory into zip file
         if compress:
